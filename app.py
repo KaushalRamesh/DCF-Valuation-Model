@@ -17,6 +17,7 @@ from components.charts import (
 )
 from components.metrics import (
     render_company_header,
+    render_formula_audit,
     render_validation_issues,
     render_valuation_summary_cards,
     render_wacc_breakdown,
@@ -28,6 +29,7 @@ from components.tables import (
     format_statement_for_display,
     render_sensitivity_table,
 )
+from src.audit import build_formula_audit
 from src.config import SETTINGS, format_large_currency, format_per_share, get_display_scale
 from src.data_fetcher import CompanyFinancialData, TickerDataError, apply_manual_overrides, fetch_company_financials
 from src.dcf_engine import DCFValuationResult, run_fcfe_dcf, run_fcff_dcf
@@ -253,8 +255,13 @@ def main() -> None:
             key=f"scenario_{active_ticker}_{cfg.valuation_method}",
         )
     with info_col:
+        method_note = (
+            f" *(Note: {industry_profile.recommended_method} recommended for {industry_profile.sector})*"
+            if cfg.valuation_method != industry_profile.recommended_method
+            else ""
+        )
         st.info(
-            f"**Active Methodology:** {cfg.valuation_method} | **Scenario:** {scenario} — "
+            f"**Active Methodology:** {cfg.valuation_method}{method_note} | **Scenario:** {scenario} — "
             "Edit any annual growth rate, margin, or reinvestment assumption below."
         )
 
@@ -450,12 +457,16 @@ def main() -> None:
 
     if cfg.use_custom_discount_rate:
         active_discount_rate = cfg.custom_discount_rate
+        discount_rate_source = "Custom Discount Rate Override"
     elif cfg.valuation_method == "FCFE":
         active_discount_rate = ke_only
+        discount_rate_source = "Cost of Equity (CAPM)"
     elif wacc_res is not None:
         active_discount_rate = wacc_res.wacc
+        discount_rate_source = "WACC (Market-Value Weighted)"
     else:
         active_discount_rate = ke_only
+        discount_rate_source = "Cost of Equity (WACC fallback — Market Cap or Debt unavailable)"
 
     # Execute DCF Valuation
     dcf_result: DCFValuationResult | None = None
@@ -468,7 +479,13 @@ def main() -> None:
     )
 
     can_run_dcf = not any(i.severity == "error" for i in pre_issues)
-    if cfg.valuation_method == "FCFF" and (cash_val is None or debt_val is None):
+    if data.raw_currency_mismatch:
+        can_run_dcf = False
+        dcf_error_msg = (
+            f"Currency mismatch between trading price ({mkt.get('currency')}) and financial statements "
+            f"({mkt.get('financial_currency')}). Convert statements or override currency-aligned values before valuing."
+        )
+    elif cfg.valuation_method == "FCFF" and (cash_val is None or debt_val is None):
         can_run_dcf = False
         dcf_error_msg = (
             "Cash & Equivalents or Total Debt is unavailable for the Equity Value bridge. "
@@ -494,6 +511,7 @@ def main() -> None:
                     current_market_price=price,
                     margin_of_safety_pct=cfg.margin_of_safety_pct,
                     non_operating_adjustments=cfg.non_operating_adjustments,
+                    discount_rate_source=discount_rate_source,
                 )
             else:
                 dcf_result = run_fcfe_dcf(
@@ -503,6 +521,7 @@ def main() -> None:
                     shares_outstanding=float(shares),
                     current_market_price=price,
                     margin_of_safety_pct=cfg.margin_of_safety_pct,
+                    discount_rate_source=discount_rate_source,
                 )
         except ValueError as exc:
             dcf_error_msg = str(exc)
@@ -572,12 +591,15 @@ def main() -> None:
                 )
 
         st.markdown("#### Discount Rate & WACC Calculation")
+        st.info(f"**Active Discount Rate ({cfg.valuation_method}):** {active_discount_rate:.2%} — Source: {discount_rate_source}")
         if wacc_res is not None:
-            render_wacc_breakdown(wacc_res, currency, cfg.unit_mode)
-            if cfg.use_custom_discount_rate:
-                st.info(f"Using manual discount rate override: **{cfg.custom_discount_rate:.2%}**")
-            elif cfg.valuation_method == "FCFE":
-                st.info(f"FCFE Mode uses Cost of Equity (CAPM): **{ke_only:.2%}**")
+            render_wacc_breakdown(
+                wacc_res,
+                currency,
+                cfg.unit_mode,
+                active_methodology=cfg.valuation_method,
+                use_custom_discount_rate=cfg.use_custom_discount_rate,
+            )
         else:
             st.warning(
                 f"Full WACC requires Market Cap and Total Debt. Using Cost of Equity (CAPM) = **{ke_only:.2%}**."
@@ -644,14 +666,28 @@ def main() -> None:
         if dcf_result is None or shares is None or shares <= 0:
             st.warning("Complete valid valuation inputs first to generate the sensitivity matrix.")
         else:
+            default_center_r = min(30.0, max(2.0, round(active_discount_rate * 100.0, 2)))
+            default_center_g = min(10.0, max(-2.0, round(cfg.terminal_growth_rate * 100.0, 2)))
+            rc_key = f"sens_rc_{active_ticker}"
+            gc_key = f"sens_gc_{active_ticker}"
+            prev_r_key = f"sens_prev_r_{active_ticker}"
+            prev_g_key = f"sens_prev_g_{active_ticker}"
+
+            if st.session_state.get(prev_r_key) != default_center_r:
+                st.session_state[rc_key] = default_center_r
+                st.session_state[prev_r_key] = default_center_r
+            if st.session_state.get(prev_g_key) != default_center_g:
+                st.session_state[gc_key] = default_center_g
+                st.session_state[prev_g_key] = default_center_g
+
             sc1, sc2, sc3, sc4 = st.columns(4)
             center_r_pct = sc1.number_input(
                 "Center Discount Rate (%)",
                 min_value=2.0,
                 max_value=30.0,
-                value=round(active_discount_rate * 100.0, 2),
+                value=default_center_r,
                 step=0.5,
-                key=f"sens_rc_{active_ticker}",
+                key=rc_key,
             )
             step_r_pct = sc2.number_input(
                 "Discount Rate Step (%)",
@@ -665,9 +701,9 @@ def main() -> None:
                 "Center Terminal Growth (%)",
                 min_value=-2.0,
                 max_value=10.0,
-                value=round(cfg.terminal_growth_rate * 100.0, 2),
+                value=default_center_g,
                 step=0.5,
-                key=f"sens_gc_{active_ticker}",
+                key=gc_key,
             )
             step_g_pct = sc4.number_input(
                 "Terminal Growth Step (%)",
@@ -699,13 +735,36 @@ def main() -> None:
             )
             st.markdown("#### Intrinsic Value Per Share Sensitivity Table")
             st.caption(
+                f"Active Methodology: **{cfg.valuation_method}** | Scenario: **{scenario}** — "
                 "Green cells: >10% above current market price | Amber: within ±10% | Red: >10% below market price."
             )
             render_sensitivity_table(sens_res.intrinsic_value_matrix, currency, price)
 
     # Tab 5: Formula Audit & Disclaimer
     with tab_audit:
-        st.subheader("Model Formulas, Transparency & Disclaimer")
+        st.subheader("Live Valuation Formula Audit & Transparency")
+        if dcf_result is not None:
+            active_assump = active_fcff_assump if cfg.valuation_method == "FCFF" else active_fcfe_assump
+            audit_report = build_formula_audit(
+                dcf_result=dcf_result,
+                assumptions=active_assump,
+                market_data=mkt,
+                industry_profile=industry_profile,
+                wacc_res=wacc_res,
+                ke_only=ke_only,
+                risk_free_rate=cfg.risk_free_rate,
+                beta=cfg.beta,
+                equity_risk_premium=cfg.equity_risk_premium,
+                pre_tax_cost_of_debt=cfg.pre_tax_cost_of_debt,
+                wacc_tax_rate=cfg.wacc_tax_rate,
+                unit_mode=cfg.unit_mode,
+            )
+            render_formula_audit(audit_report)
+            st.markdown("---")
+        else:
+            st.warning("Complete valid valuation inputs to generate the live numerical formula audit.")
+
+        st.subheader("Reference Formulas & Disclaimer")
         st.markdown(
             """
             **1. Unlevered Free Cash Flow (UFCF)**

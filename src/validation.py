@@ -79,6 +79,21 @@ def validate_company_data(
                 message="Market capitalization is unavailable; WACC equity weight will rely on Price × Shares if available.",
             )
         )
+    elif not _is_missing(price) and float(price) > 0 and not _is_missing(shares) and float(shares) > 0:
+        implied_mcap = float(price) * float(shares)
+        rel_diff = abs(float(market_cap) - implied_mcap) / float(market_cap)
+        if rel_diff > 0.15:
+            issues.append(
+                ValidationIssue(
+                    severity="warning",
+                    category="Unit Consistency",
+                    field="market_cap",
+                    message=(
+                        f"Reported Market Cap ({float(market_cap):,.0f}) differs from Price × Shares "
+                        f"({implied_mcap:,.0f}) by {rel_diff:.1%}. Verify share count and currency units."
+                    ),
+                )
+            )
 
     if _is_missing(beta):
         issues.append(

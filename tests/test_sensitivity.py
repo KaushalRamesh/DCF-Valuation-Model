@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from src.dcf_engine import run_fcff_dcf
+from src.dcf_engine import run_fcfe_dcf, run_fcff_dcf
 from src.sensitivity import build_range, compute_sensitivity_matrix
 
 
@@ -64,3 +64,41 @@ def test_sensitivity_invalid_shares_raises():
 def test_build_range():
     r = build_range(center=0.10, step=0.01, count_each_side=2, min_val=0.01)
     assert r == [0.08, 0.09, 0.10, 0.11, 0.12]
+
+
+def test_sensitivity_fcfe_mode_recalculates_without_debt_subtraction():
+    """Verify FCFE sensitivity grid matches direct run_fcfe_dcf and ignores cash/debt."""
+    forecast_df = pd.DataFrame(
+        {
+            "Year": [f"Year {i}" for i in range(1, 6)],
+            "Period": [1, 2, 3, 4, 5],
+            "FCFE": [80.0, 90.0, 100.0, 110.0, 120.0],
+        }
+    )
+    ke_list = [0.09, 0.10, 0.11]
+    tg_list = [0.03, 0.04]
+
+    sens = compute_sensitivity_matrix(
+        forecast_df=forecast_df,
+        discount_rates=ke_list,
+        terminal_growth_rates=tg_list,
+        shares_outstanding=100.0,
+        methodology="FCFE",
+        cash=500.0,
+        total_debt=2000.0,
+        current_market_price=20.0,
+    )
+    direct = run_fcfe_dcf(
+        forecast_df=forecast_df,
+        cost_of_equity=0.10,
+        terminal_growth_rate=0.04,
+        shares_outstanding=100.0,
+        current_market_price=20.0,
+    )
+    assert sens.intrinsic_value_matrix.loc["10.00%", "4.00%"] == pytest.approx(direct.intrinsic_value_per_share)
+
+
+def test_sensitivity_invalid_methodology_raises():
+    forecast_df = pd.DataFrame({"Period": [1, 2, 3, 4, 5], "UFCF": [100.0] * 5})
+    with pytest.raises(ValueError):
+        compute_sensitivity_matrix(forecast_df, [0.10], [0.03], shares_outstanding=10.0, methodology="INVALID")

@@ -40,6 +40,20 @@ class IndustryProfile:
     methodology_explanation: str
 
 
+def get_methodology_explanation(methodology: str) -> str:
+    """Return accurate explanation text for the given active valuation methodology."""
+    if methodology == "FCFE":
+        return (
+            "FCFE Valuation Mode: Discounts projected Free Cash Flow to Equity (FCFE) and Terminal Value "
+            "directly at Cost of Equity (CAPM) to estimate Equity Value without forcing an Enterprise Value "
+            "bridge or subtracting debt again."
+        )
+    return (
+        "FCFF Valuation Mode: Discounts projected Unlevered Free Cash Flow (UFCF) and Terminal Value at WACC "
+        "to compute Enterprise Value, then bridges to Equity Value (+ Cash - Debt)."
+    )
+
+
 def detect_industry_profile(sector: Optional[str], industry: Optional[str]) -> IndustryProfile:
     """Determine whether a company requires standard FCFF DCF or financial-institution FCFE guidance."""
     sec = (sector or "Unavailable").strip()
@@ -63,10 +77,7 @@ def detect_industry_profile(sector: Optional[str], industry: Optional[str]) -> I
                 "part of operating funding (deposits/borrowings) and CapEx/working capital definitions differ. "
                 "FCFE (Free Cash Flow to Equity) discounted at the Cost of Equity is recommended."
             ),
-            methodology_explanation=(
-                "FCFE Valuation Mode: Discounts projected Free Cash Flow to Equity directly at the Cost of Equity "
-                "(CAPM) to estimate Equity Value without forcing an Enterprise Value bridge."
-            ),
+            methodology_explanation=get_methodology_explanation("FCFE"),
         )
 
     return IndustryProfile(
@@ -75,8 +86,5 @@ def detect_industry_profile(sector: Optional[str], industry: Optional[str]) -> I
         is_financial_institution=False,
         recommended_method="FCFF",
         warning_message=None,
-        methodology_explanation=(
-            "FCFF Valuation Mode: Discounts projected Unlevered Free Cash Flow (UFCF) and Terminal Value at WACC "
-            "to compute Enterprise Value, then bridges to Equity Value (+ Cash - Debt)."
-        ),
+        methodology_explanation=get_methodology_explanation("FCFF"),
     )

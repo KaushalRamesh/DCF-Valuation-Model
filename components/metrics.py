@@ -6,9 +6,10 @@ from typing import Any
 
 import streamlit as st
 
+from src.audit import FormulaAuditReport
 from src.config import format_large_currency, format_percent, format_per_share
 from src.dcf_engine import DCFValuationResult
-from src.industry import IndustryProfile
+from src.industry import IndustryProfile, get_methodology_explanation
 from src.validation import ValidationIssue
 from src.wacc import WACCResult
 
@@ -94,6 +95,14 @@ def render_valuation_summary_cards(
     else:
         badge_color = "#F59E0B"
 
+    active_explanation = get_methodology_explanation(result.methodology)
+    mismatch_note = ""
+    if result.methodology != industry_profile.recommended_method:
+        mismatch_note = (
+            f" Note: Industry profile ({industry_profile.sector} / {industry_profile.industry}) "
+            f"recommends {industry_profile.recommended_method}, while active valuation uses {result.methodology}."
+        )
+
     st.markdown(
         f"""
         <div class="dcf-status-banner" style="border-left: 4px solid {badge_color};">
@@ -102,7 +111,7 @@ def render_valuation_summary_cards(
                     Valuation Assessment: {result.valuation_label}
                 </span>
                 <span style="color:#9CA3AF; margin-left:10px; font-size:0.9rem;">
-                    ({industry_profile.methodology_explanation})
+                    ({active_explanation}{mismatch_note})
                 </span>
             </div>
         </div>
@@ -145,24 +154,88 @@ def render_valuation_summary_cards(
 
     if result.methodology == "FCFF":
         b5.metric("Enterprise Value", format_large_currency(result.enterprise_value, currency, unit_mode))
-        e1, e2, e3, e4 = st.columns(4)
-        e1.metric("Cash & Equivalents", format_large_currency(result.cash, currency, unit_mode))
-        e2.metric("Total Debt", format_large_currency(result.total_debt, currency, unit_mode))
-        e3.metric("Net Debt (Debt - Cash)", format_large_currency(result.net_debt, currency, unit_mode))
-        e4.metric("Equity Value", format_large_currency(result.equity_value, currency, unit_mode))
+        if abs(result.non_operating_adjustments) > 0:
+            e1, e2, e3, e4, e5 = st.columns(5)
+            e1.metric("Cash & Equivalents", format_large_currency(result.cash, currency, unit_mode))
+            e2.metric("Total Debt", format_large_currency(result.total_debt, currency, unit_mode))
+            e3.metric("Net Debt (Debt - Cash)", format_large_currency(result.net_debt, currency, unit_mode))
+            e4.metric("Non-Op Adjustments", format_large_currency(result.non_operating_adjustments, currency, unit_mode))
+            e5.metric("Equity Value", format_large_currency(result.equity_value, currency, unit_mode))
+        else:
+            e1, e2, e3, e4 = st.columns(4)
+            e1.metric("Cash & Equivalents", format_large_currency(result.cash, currency, unit_mode))
+            e2.metric("Total Debt", format_large_currency(result.total_debt, currency, unit_mode))
+            e3.metric("Net Debt (Debt - Cash)", format_large_currency(result.net_debt, currency, unit_mode))
+            e4.metric("Equity Value", format_large_currency(result.equity_value, currency, unit_mode))
+        st.caption(
+            f"FCFF Bridge (discounted at {result.discount_rate:.2%}): "
+            "Enterprise Value = PV(5Y UFCF) + PV(Terminal Value); "
+            "Equity Value = Enterprise Value + Cash - Total Debt"
+            + (" + Non-Operating Adjustments." if abs(result.non_operating_adjustments) > 0 else ".")
+        )
     else:
         b5.metric("Equity Value (FCFE)", format_large_currency(result.equity_value, currency, unit_mode))
+        st.caption(
+            f"Direct Equity Valuation (FCFE, discounted at {result.discount_rate:.2%}): "
+            "Equity Value = PV(5Y FCFE) + PV(Terminal Value). "
+            "Enterprise Value is not computed and debt is not subtracted again."
+        )
 
 
-def render_wacc_breakdown(wacc_res: WACCResult, currency: str, unit_mode: str) -> None:
+def render_wacc_breakdown(
+    wacc_res: WACCResult,
+    currency: str,
+    unit_mode: str,
+    active_methodology: str = "FCFF",
+    use_custom_discount_rate: bool = False,
+) -> None:
     """Display transparent CAPM & WACC formula breakdown."""
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Cost of Equity (CAPM)", format_percent(wacc_res.cost_of_equity))
+    ke_label = "Cost of Equity (CAPM — Active)" if (active_methodology == "FCFE" and not use_custom_discount_rate) else "Cost of Equity (CAPM)"
+    wacc_label = "Calculated WACC (Active)" if (active_methodology == "FCFF" and not use_custom_discount_rate) else "Calculated WACC (Reference)"
+    c1.metric(ke_label, format_percent(wacc_res.cost_of_equity))
     c2.metric("After-Tax Cost of Debt", format_percent(wacc_res.after_tax_cost_of_debt))
     c3.metric("Capital Weights (E / D)", f"{wacc_res.equity_weight:.1%} / {wacc_res.debt_weight:.1%}")
-    c4.metric("Calculated WACC", format_percent(wacc_res.wacc))
+    c4.metric(wacc_label, format_percent(wacc_res.wacc))
     st.caption(
         f"Equity Weight uses Market Capitalization ({format_large_currency(wacc_res.equity_value, currency, unit_mode)}), "
         f"not book equity."
     )
     st.code(wacc_res.formula_summary, language="text")
+
+
+def render_formula_audit(audit: FormulaAuditReport) -> None:
+    """Render the live, step-by-step DCF Formula Audit tables and reconciliation status."""
+    if audit.reconciliation_passed:
+        st.success(
+            f"**Formula Audit Reconciliation Passed** — Active Methodology: **{audit.methodology}** | "
+            f"Scenario: **{audit.scenario}** | Max reconciliation delta: `{audit.max_reconciliation_error:.2e}`"
+        )
+    else:
+        st.error(
+            f"**Formula Audit Reconciliation Mismatch** — Max delta: `{audit.max_reconciliation_error:.4f}`"
+        )
+
+    if not audit.methodology_aligned:
+        st.warning(
+            f"Selected methodology (**{audit.methodology}**) differs from industry-recommended "
+            f"methodology (**{audit.recommended_methodology}**)."
+        )
+
+    for note in audit.optimistic_check_notes:
+        st.caption(note)
+
+    st.markdown("##### 1. Major Inputs & Unit Consistency Check")
+    st.dataframe(audit.inputs_table, width="stretch", hide_index=True)
+
+    st.markdown("##### 2. Discount Rate Calculation Audit")
+    st.dataframe(audit.discount_rate_audit, width="stretch", hide_index=True)
+
+    st.markdown("##### 3. 5-Year Cash Flow Discounting Audit")
+    st.dataframe(audit.cashflow_audit_table, width="stretch", hide_index=True)
+
+    st.markdown("##### 4. Terminal Value & Present Value Audit")
+    st.dataframe(audit.terminal_value_audit, width="stretch", hide_index=True)
+
+    st.markdown("##### 5. Valuation Bridge & Intrinsic Value Per Share Audit")
+    st.dataframe(audit.bridge_audit, width="stretch", hide_index=True)

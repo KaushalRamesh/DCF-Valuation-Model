@@ -86,9 +86,22 @@ def render_sidebar(
         "Cash Flow Basis",
         options=method_choices,
         index=default_idx,
-        format_func=lambda m: "FCFF (Enterprise DCF)" if m == "FCFF" else "FCFE (Equity DCF — Financials)",
+        format_func=lambda m: (
+            "FCFF (Enterprise DCF)"
+            if m == "FCFF"
+            else (
+                "FCFE (Equity DCF — Recommended)"
+                if industry_profile.is_financial_institution
+                else "FCFE (Equity DCF — Direct)"
+            )
+        ),
         key=f"val_method_{ticker}",
     )
+    if not industry_profile.is_financial_institution and valuation_method == "FCFE":
+        st.sidebar.info(
+            "Non-financial company detected: FCFF is recommended. FCFE mode projects distributable Net Income "
+            "and skips the EV / Cash / Debt bridge."
+        )
 
     # WACC / CAPM Controls
     st.sidebar.markdown("### 2. Discount Rate (CAPM & WACC)")

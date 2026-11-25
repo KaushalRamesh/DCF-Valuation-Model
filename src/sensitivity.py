@@ -44,6 +44,8 @@ def compute_sensitivity_matrix(
     """
     if shares_outstanding <= 0:
         raise ValueError("Shares outstanding must be strictly positive for sensitivity analysis.")
+    if methodology not in {"FCFF", "FCFE"}:
+        raise ValueError(f"Unsupported methodology '{methodology}'. Expected 'FCFF' or 'FCFE'.")
 
     row_labels = [f"{r * 100:.2f}%" for r in discount_rates]
     col_labels = [f"{g * 100:.2f}%" for g in terminal_growth_rates]

@@ -35,6 +35,7 @@ class DCFValuationResult:
     suggested_buy_price: float
     valuation_label: str
     forecast_pv_table: pd.DataFrame
+    discount_rate_source: str = ""
 
 
 def classify_valuation_label(
@@ -84,6 +85,7 @@ def run_fcff_dcf(
     current_market_price: Optional[float] = None,
     margin_of_safety_pct: float = 0.20,
     non_operating_adjustments: float = 0.0,
+    discount_rate_source: str = "WACC",
 ) -> DCFValuationResult:
     """Execute standard Enterprise Value -> Equity Value FCFF DCF valuation.
 
@@ -108,6 +110,8 @@ def run_fcff_dcf(
 
     df = forecast_df.copy()
     periods = df["Period"].astype(float).values if "Period" in df.columns else np.arange(1, len(df) + 1, dtype=float)
+    if len(periods) == 0 or np.any(periods <= 0) or np.any(np.diff(periods) <= 0):
+        raise ValueError("Forecast periods must be strictly positive and strictly increasing.")
     ufcf_values = df["UFCF"].astype(float).values
 
     discount_factors = (1.0 + wacc) ** periods
@@ -163,6 +167,7 @@ def run_fcff_dcf(
         suggested_buy_price=suggested_buy,
         valuation_label=label,
         forecast_pv_table=df,
+        discount_rate_source=discount_rate_source,
     )
 
 
@@ -173,6 +178,7 @@ def run_fcfe_dcf(
     shares_outstanding: float,
     current_market_price: Optional[float] = None,
     margin_of_safety_pct: float = 0.20,
+    discount_rate_source: str = "Cost of Equity (CAPM)",
 ) -> DCFValuationResult:
     """Execute direct Equity Value FCFE DCF for banks and financial institutions.
 
@@ -191,6 +197,8 @@ def run_fcfe_dcf(
 
     df = forecast_df.copy()
     periods = df["Period"].astype(float).values if "Period" in df.columns else np.arange(1, len(df) + 1, dtype=float)
+    if len(periods) == 0 or np.any(periods <= 0) or np.any(np.diff(periods) <= 0):
+        raise ValueError("Forecast periods must be strictly positive and strictly increasing.")
     fcfe_values = df["FCFE"].astype(float).values
 
     discount_factors = (1.0 + cost_of_equity) ** periods
@@ -242,4 +250,5 @@ def run_fcfe_dcf(
         suggested_buy_price=suggested_buy,
         valuation_label=label,
         forecast_pv_table=df,
+        discount_rate_source=discount_rate_source,
     )
