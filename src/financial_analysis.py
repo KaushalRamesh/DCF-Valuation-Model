@@ -74,6 +74,7 @@ def analyze_historical_financials(
     ebit = _row(income_df, "Operating Income / EBIT")
     ni = _row(income_df, "Net Income")
     tax = _row(income_df, "Income Tax Expense")
+    pretax_reported = _row(income_df, "Pretax Income")
     interest = _row(income_df, "Interest Expense")
 
     da = _row(cashflow_df, "Depreciation & Amortization")
@@ -88,16 +89,18 @@ def analyze_historical_financials(
     ca = _row(balance_df, "Current Assets")
     cl = _row(balance_df, "Current Liabilities")
     cash = _row(balance_df, "Total Cash & Equivalents")
+    curr_debt = _row(balance_df, "Current Debt")
 
-    # Operating Net Working Capital approximation: (Current Assets - Cash) - Current Liabilities
-    # (Falls back to Current Assets - Current Liabilities only if Cash is missing)
+    # Operating Net Working Capital: (Current Assets - Cash & ST Investments) - (Current Liabilities - Current Debt)
+    # (Falls back cleanly when Cash or Current Debt is missing)
     non_cash_ca = np.where(cash.notna(), ca - cash, ca)
-    nwc = pd.Series(non_cash_ca, index=cols, dtype=float) - cl
+    op_cl = np.where(curr_debt.notna(), cl - curr_debt, cl)
+    nwc = pd.Series(non_cash_ca, index=cols, dtype=float) - pd.Series(op_cl, index=cols, dtype=float)
     nwc = nwc.where(ca.notna() & cl.notna(), np.nan)
     change_in_nwc = nwc.diff()
 
-    # Effective tax rate estimate: Tax / (EBIT - Interest) when pretax proxy > 0
-    pretax_proxy = ebit - interest.fillna(0.0)
+    # Effective tax rate estimate: Tax / Pretax Income when available (else fallback to EBIT - Interest)
+    pretax_proxy = pretax_reported.where(pretax_reported.notna(), ebit - interest.fillna(0.0))
     eff_tax = _safe_divide(tax, pretax_proxy.where(pretax_proxy > 0, np.nan))
     eff_tax = eff_tax.clip(lower=0.0, upper=0.50)
 
@@ -156,6 +159,7 @@ def analyze_historical_financials(
     summary = {
         "revenue_cagr": compute_cagr(rev),
         "median_revenue_growth": _median_or_none("Revenue Growth (%)", 100.0),
+        "median_gross_margin": _median_or_none("Gross Margin (%)", 100.0),
         "median_ebit_margin": _median_or_none("EBIT Margin (%)", 100.0),
         "median_net_margin": _median_or_none("Net Profit Margin (%)", 100.0),
         "median_fcf_margin": _median_or_none("FCF Margin (%)", 100.0),

@@ -332,7 +332,25 @@ def main() -> None:
                 )
                 ebit_margins.append(val / 100.0)
 
-            p1, p2, p3, p4 = st.columns(4)
+            c_cols = st.columns(5)
+            capex_pcts: list[float] = []
+            default_capex_list = (
+                list(default_assump.capex_pct_of_revenue)
+                if isinstance(default_assump.capex_pct_of_revenue, (list, tuple))
+                else [float(default_assump.capex_pct_of_revenue)] * 5
+            )
+            for i in range(5):
+                val = c_cols[i].number_input(
+                    f"Yr {i + 1} CapEx (% Rev)",
+                    min_value=0.0,
+                    max_value=60.0,
+                    value=round(default_capex_list[i] * 100.0, 2),
+                    step=0.25,
+                    key=f"{key_prefix}_capex_{i}",
+                )
+                capex_pcts.append(val / 100.0)
+
+            p1, p2, p3 = st.columns(3)
             tax_rate_pct = p1.number_input(
                 "Forecast Tax Rate (%)",
                 min_value=0.0,
@@ -349,15 +367,7 @@ def main() -> None:
                 step=0.25,
                 key=f"{key_prefix}_da",
             )
-            capex_pct = p3.number_input(
-                "CapEx (% of Revenue)",
-                min_value=0.0,
-                max_value=60.0,
-                value=round(default_assump.capex_pct_of_revenue * 100.0, 2),
-                step=0.25,
-                key=f"{key_prefix}_capex",
-            )
-            nwc_pct = p4.number_input(
+            nwc_pct = p3.number_input(
                 "Incremental NWC (% of ΔRev)",
                 min_value=-30.0,
                 max_value=50.0,
@@ -373,7 +383,7 @@ def main() -> None:
                 ebit_margins=ebit_margins,
                 tax_rate=tax_rate_pct / 100.0,
                 da_pct_of_revenue=da_pct / 100.0,
-                capex_pct_of_revenue=capex_pct / 100.0,
+                capex_pct_of_revenue=capex_pcts,
                 nwc_pct_of_revenue=nwc_pct / 100.0,
                 derivation_notes=default_assump.derivation_notes,
             )

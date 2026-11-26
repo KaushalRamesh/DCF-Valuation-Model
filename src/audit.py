@@ -75,11 +75,16 @@ def build_formula_audit(
     ]
 
     if isinstance(assumptions, ForecastAssumptions):
+        capex_display = (
+            ", ".join(f"{c * 100:.2f}%" for c in assumptions.capex_pct_of_revenue)
+            if isinstance(assumptions.capex_pct_of_revenue, (list, tuple))
+            else f"{assumptions.capex_pct_of_revenue * 100:.2f}%"
+        )
         input_rows.extend([
             {"Category": "Forecast (FCFF)", "Item": "Yr 1–5 EBIT Margins", "Value": ", ".join(f"{m * 100:.2f}%" for m in assumptions.ebit_margins), "Notes": "EBIT / Revenue"},
             {"Category": "Forecast (FCFF)", "Item": "Forecast Tax Rate", "Value": f"{assumptions.tax_rate * 100:.2f}%", "Notes": "Applied to EBIT for NOPAT"},
             {"Category": "Forecast (FCFF)", "Item": "D&A (% of Revenue)", "Value": f"{assumptions.da_pct_of_revenue * 100:.2f}%", "Notes": "Added back to NOPAT"},
-            {"Category": "Forecast (FCFF)", "Item": "CapEx (% of Revenue)", "Value": f"{assumptions.capex_pct_of_revenue * 100:.2f}%", "Notes": "Subtracted from operating cash flow"},
+            {"Category": "Forecast (FCFF)", "Item": "Yr 1–5 CapEx (% of Revenue)", "Value": capex_display, "Notes": "Subtracted from operating cash flow"},
             {"Category": "Forecast (FCFF)", "Item": "Incremental NWC (% of ΔRev)", "Value": f"{assumptions.nwc_pct_of_revenue * 100:.2f}%", "Notes": "ΔNWC = (Rev_t - Rev_{t-1}) × NWC%"},
             {"Category": "Bridge (FCFF)", "Item": "Cash & Equivalents", "Value": format_large_currency(dcf_result.cash, currency, unit_mode), "Notes": "Added to Enterprise Value"},
             {"Category": "Bridge (FCFF)", "Item": "Total Debt", "Value": format_large_currency(dcf_result.total_debt, currency, unit_mode), "Notes": "Subtracted from Enterprise Value"},

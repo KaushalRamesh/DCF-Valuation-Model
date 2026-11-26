@@ -113,6 +113,18 @@ def validate_company_data(
                 message=f"Reported Beta ({float(beta):.2f}) is outside typical [0, 4.0] range; verify before relying on CAPM.",
             )
         )
+    elif float(beta) < 0.4:
+        issues.append(
+            ValidationIssue(
+                severity="warning",
+                category="Market Data",
+                field="beta",
+                message=(
+                    f"Reported Beta ({float(beta):.2f}) is unusually low (< 0.40), which yields a very low CAPM "
+                    "Cost of Equity. Consider overriding Beta with a sector/peer beta in the sidebar."
+                ),
+            )
+        )
 
     if trade_ccy and fin_ccy and trade_ccy.upper() != fin_ccy.upper():
         issues.append(

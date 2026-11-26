@@ -42,6 +42,7 @@ INCOME_LINE_ITEMS: list[tuple[str, list[str]]] = [
         ],
     ),
     ("Income Tax Expense", ["Tax Provision", "Income Tax Expense"]),
+    ("Pretax Income", ["Pretax Income"]),
     ("Interest Expense", ["Interest Expense", "Interest Expense Non Operating"]),
 ]
 
@@ -59,9 +60,10 @@ CASHFLOW_LINE_ITEMS: list[tuple[str, list[str]]] = [
 BALANCE_LINE_ITEMS: list[tuple[str, list[str]]] = [
     (
         "Total Cash & Equivalents",
-        ["Cash And Cash Equivalents", "Cash Cash Equivalents And Short Term Investments"],
+        ["Cash Cash Equivalents And Short Term Investments", "Cash And Cash Equivalents"],
     ),
     ("Total Debt", ["Total Debt"]),
+    ("Current Debt", ["Current Debt And Capital Lease Obligation", "Current Debt"]),
     ("Current Assets", ["Current Assets", "Total Current Assets"]),
     ("Current Liabilities", ["Current Liabilities", "Total Current Liabilities"]),
     (

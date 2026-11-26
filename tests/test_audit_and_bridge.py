@@ -266,3 +266,147 @@ def test_validation_detects_market_cap_share_unit_mismatch():
         balance_df=pd.DataFrame(),
     )
     assert any(i.category == "Unit Consistency" and i.field == "market_cap" for i in issues)
+
+
+def test_cash_short_term_investments_and_current_debt_nwc():
+    """Cash + ST investments must be prioritized over pure cash, and Current Debt excluded from Operating NWC."""
+    from unittest.mock import patch
+    from src.data_fetcher import fetch_company_financials
+
+    class _MockEternalTicker:
+        info = {
+            "currentPrice": 371.7,
+            "sharesOutstanding": 9212774343.0,
+            "marketCap": 3424388382720.0,
+            "beta": 0.24,
+            "currency": "INR",
+            "financialCurrency": "INR",
+            "sector": "Consumer Cyclical",
+            "industry": "Internet Retail",
+            "longName": "Eternal Limited",
+        }
+        financials = pd.DataFrame(
+            {
+                "2024-03-31": [12114e7, 9232e7, -383e7, 351e7],
+                "2025-03-31": [20243e7, 14678e7, 10e7, 527e7],
+                "2026-03-31": [54364e7, 24197e7, -63e7, 366e7],
+            },
+            index=["Total Revenue", "Gross Profit", "Operating Income", "Net Income"],
+        )
+        cashflow = pd.DataFrame(
+            {
+                "2024-03-31": [526e7, -215e7],
+                "2025-03-31": [863e7, -936e7],
+                "2026-03-31": [1597e7, -1751e7],
+            },
+            index=["Depreciation And Amortization", "Capital Expenditure"],
+        )
+        balance_sheet = pd.DataFrame(
+            {
+                "2024-03-31": [309e7, 3405e7, 749e7, 161e7, 5458e7, 2083e7],
+                "2025-03-31": [666e7, 7638e7, 2045e7, 391e7, 11701e7, 3326e7],
+                "2026-03-31": [993e7, 8586e7, 4592e7, 759e7, 15700e7, 5672e7],
+            },
+            index=[
+                "Cash And Cash Equivalents",
+                "Cash Cash Equivalents And Short Term Investments",
+                "Total Debt",
+                "Current Debt And Capital Lease Obligation",
+                "Current Assets",
+                "Current Liabilities",
+            ],
+        )
+
+    with patch("src.data_fetcher.yf.Ticker", return_value=_MockEternalTicker()):
+        data = fetch_company_financials("ETERNAL.NS")
+
+    # Cash should include Short-Term Investments (8586 Cr), not just 993 Cr
+    assert data.balance_sheet.loc["Total Cash & Equivalents", "FY2026"] == pytest.approx(8586e7)
+    assert data.balance_sheet.loc["Current Debt", "FY2026"] == pytest.approx(759e7)
+
+    analysis = analyze_historical_financials(data.income_statement, data.cashflow_statement, data.balance_sheet)
+    # Operating NWC = (15700 - 8586) - (5672 - 759) = 2201 Cr -> 2201 / 54364 = 4.05% (not 16.62%)
+    assert analysis.summary_stats["latest_nwc_pct_rev"] == pytest.approx(2201.0 / 54364.0, rel=1e-4)
+
+    # Low beta (0.24) must trigger a warning
+    issues = validate_company_data(data.market_data, data.income_statement, data.cashflow_statement, data.balance_sheet)
+    assert any(i.field == "beta" and i.severity == "warning" for i in issues)
+
+    # Turnaround margin recovery path must yield positive Year 5 EBIT, positive TV, and Optimistic > Base > Conservative
+    results = {}
+    for scen in ("Conservative", "Base", "Optimistic"):
+        fa = derive_initial_fcff_assumptions(data.income_statement, analysis, scenario=scen, default_tax_rate=0.25, terminal_growth_anchor=0.04)
+        fdf = build_fcff_forecast(fa)
+        assert fa.ebit_margins[-1] > fa.ebit_margins[0]
+        assert fa.ebit_margins[-1] > 0.0
+        res = run_fcff_dcf(
+            fdf,
+            wacc=0.0853,
+            terminal_growth_rate=0.04,
+            cash=8586e7,
+            total_debt=4592e7,
+            shares_outstanding=9212774343.0,
+            current_market_price=371.7,
+        )
+        assert res.terminal_value > 0
+        assert res.intrinsic_value_per_share > 0
+        results[scen] = res.intrinsic_value_per_share
+
+    assert results["Optimistic"] > results["Base"] > results["Conservative"]
+
+
+def test_reliance_style_capex_normalization_and_pretax_income_tax_rate():
+    """Peak CapEx cycle must fade toward steady-state D&A reinvestment and tax rate must use Pretax Income."""
+    cr = 1e7
+    inc = pd.DataFrame(
+        {
+            "FY2023": [877835.0 * cr, 102015.0 * cr, 20376.0 * cr, 94046.0 * cr, 18958.0 * cr],
+            "FY2024": [901064.0 * cr, 111666.0 * cr, 25707.0 * cr, 104340.0 * cr, 21772.0 * cr],
+            "FY2025": [964693.0 * cr, 112462.0 * cr, 25230.0 * cr, 106017.0 * cr, 22121.0 * cr],
+            "FY2026": [1057219.0 * cr, 121377.0 * cr, 27552.0 * cr, 123162.0 * cr, 24056.0 * cr],
+        },
+        index=["Revenue", "Operating Income / EBIT", "Income Tax Expense", "Pretax Income", "Interest Expense"],
+    )
+    cf = pd.DataFrame(
+        {
+            "FY2023": [40303.0 * cr, 140988.0 * cr],
+            "FY2024": [50832.0 * cr, 152883.0 * cr],
+            "FY2025": [53136.0 * cr, 139967.0 * cr],
+            "FY2026": [57688.0 * cr, 122916.0 * cr],
+        },
+        index=["Depreciation & Amortization", "Capital Expenditure"],
+    )
+    bs = pd.DataFrame(
+        {
+            "FY2023": [161233.0 * cr, 334392.0 * cr, 134986.0 * cr, 425296.0 * cr, 395743.0 * cr],
+            "FY2024": [211310.0 * cr, 346142.0 * cr, 106015.0 * cr, 470100.0 * cr, 397367.0 * cr],
+            "FY2025": [238792.0 * cr, 369575.0 * cr, 115534.0 * cr, 499270.0 * cr, 453737.0 * cr],
+            "FY2026": [277212.0 * cr, 398000.0 * cr, 111051.0 * cr, 594249.0 * cr, 541254.0 * cr],
+        },
+        index=["Total Cash & Equivalents", "Total Debt", "Current Debt", "Current Assets", "Current Liabilities"],
+    )
+
+    analysis = analyze_historical_financials(inc, cf, bs)
+    # Using Pretax Income (123,162 Cr) rather than EBIT-Interest (97,321 Cr) keeps tax rate ~23.8%, not >28%
+    assert 0.21 < analysis.summary_stats["median_tax_rate"] < 0.25
+
+    fa = derive_initial_fcff_assumptions(inc, analysis, scenario="Base", default_tax_rate=0.25, terminal_growth_anchor=0.04)
+    assert isinstance(fa.capex_pct_of_revenue, list)
+    assert len(fa.capex_pct_of_revenue) == 5
+    # CapEx fades downward from Yr 1 toward steady-state reinvestment relative to D&A
+    assert fa.capex_pct_of_revenue[0] > fa.capex_pct_of_revenue[-1] > fa.da_pct_of_revenue
+
+    fdf = build_fcff_forecast(fa)
+    res = run_fcff_dcf(
+        fdf,
+        wacc=0.0777,
+        terminal_growth_rate=0.04,
+        cash=277212.0 * cr,
+        total_debt=398000.0 * cr,
+        shares_outstanding=13532472634.0,
+        current_market_price=1373.90,
+    )
+    assert res.terminal_value > 0
+    assert res.intrinsic_value_per_share > 0
+
+
