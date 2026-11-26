@@ -106,11 +106,11 @@ def render_valuation_summary_cards(
     st.markdown(
         f"""
         <div class="dcf-status-banner" style="border-left: 4px solid {badge_color};">
-            <div>
-                <span style="color:{badge_color}; font-weight:700; font-size:1.05rem;">
+            <div style="line-height: 1.4;">
+                <span style="color:{badge_color}; font-weight:700; font-size:0.92rem;">
                     Valuation Assessment: {result.valuation_label}
                 </span>
-                <span style="color:#9CA3AF; margin-left:10px; font-size:0.9rem;">
+                <span style="color:#9CA3AF; margin-left:8px; font-size:0.82rem;">
                     ({active_explanation}{mismatch_note})
                 </span>
             </div>

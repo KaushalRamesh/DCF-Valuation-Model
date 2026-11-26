@@ -26,16 +26,16 @@ PURPLE = "#8B5CF6"
 
 def _apply_dark_layout(fig: go.Figure, title: str, yaxis_title: str = "") -> go.Figure:
     fig.update_layout(
-        title=dict(text=title, font=dict(size=15, color=TEXT_COLOR)),
+        title=dict(text=title, font=dict(size=13.5, color=TEXT_COLOR)),
         paper_bgcolor=BG_PAPER,
         plot_bgcolor=BG_PLOT,
-        font=dict(color=TEXT_COLOR, family="Inter, Segoe UI, sans-serif", size=12),
-        margin=dict(l=55, r=25, t=48, b=42),
+        font=dict(color=TEXT_COLOR, family="Inter, Segoe UI, sans-serif", size=11),
+        margin=dict(l=50, r=20, t=42, b=36),
         xaxis=dict(gridcolor=GRID_COLOR, zerolinecolor=GRID_COLOR),
         yaxis=dict(title=yaxis_title, gridcolor=GRID_COLOR, zerolinecolor=GRID_COLOR),
         hovermode="x unified",
         showlegend=True,
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, font=dict(size=10.5)),
     )
     return fig
 
@@ -300,12 +300,12 @@ def chart_sensitivity_heatmap(
     fig.update_layout(
         title=dict(
             text="Sensitivity Heatmap: Intrinsic Value / Share (Discount Rate vs Terminal Growth)",
-            font=dict(size=15, color=TEXT_COLOR),
+            font=dict(size=13.5, color=TEXT_COLOR),
         ),
         paper_bgcolor=BG_PAPER,
         plot_bgcolor=BG_PLOT,
-        font=dict(color=TEXT_COLOR, family="Inter, Segoe UI, sans-serif", size=12),
-        margin=dict(l=70, r=30, t=55, b=55),
+        font=dict(color=TEXT_COLOR, family="Inter, Segoe UI, sans-serif", size=11),
+        margin=dict(l=65, r=25, t=48, b=48),
         xaxis=dict(title="Terminal Growth Rate"),
         yaxis=dict(title="Discount Rate (WACC / Ke)", autorange="reversed"),
     )

@@ -54,70 +54,163 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# Dark financial analyst theme styling
+# Dark financial terminal theme styling (compact typography & crisp card hierarchy)
 st.markdown(
     """
     <style>
+        html, body, [class*="css"] {
+            font-size: 14px;
+        }
         .stApp {
             background-color: #0B0E14;
             color: #E6EDF3;
         }
+        .block-container {
+            padding-top: 1.4rem !important;
+            padding-bottom: 2rem !important;
+            padding-left: 2rem !important;
+            padding-right: 2rem !important;
+            max-width: 1440px;
+        }
+        /* Compact, crisp section headings */
+        .stApp h1 { font-size: 1.45rem !important; font-weight: 700 !important; margin-bottom: 0.4rem !important; }
+        .stApp h2 { font-size: 1.2rem !important; font-weight: 600 !important; margin-top: 0.6rem !important; margin-bottom: 0.4rem !important; }
+        .stApp h3 { font-size: 1.05rem !important; font-weight: 600 !important; margin-top: 0.5rem !important; margin-bottom: 0.35rem !important; }
+        .stApp h4 { font-size: 0.95rem !important; font-weight: 600 !important; color: #D1D5DB !important; margin-top: 0.75rem !important; margin-bottom: 0.4rem !important; }
+        .stApp h5 { font-size: 0.86rem !important; font-weight: 600 !important; color: #9CA3AF !important; margin-top: 0.6rem !important; margin-bottom: 0.3rem !important; }
+
+        /* Sidebar compact proportions */
+        section[data-testid="stSidebar"] {
+            background-color: #0F131C;
+            border-right: 1px solid #1E293B;
+        }
+        section[data-testid="stSidebar"] .block-container {
+            padding-top: 1rem !important;
+        }
+        section[data-testid="stSidebar"] label,
+        section[data-testid="stSidebar"] .stMarkdown p {
+            font-size: 0.82rem !important;
+        }
+        section[data-testid="stSidebar"] h2 {
+            font-size: 1.02rem !important;
+        }
+        section[data-testid="stSidebar"] h3 {
+            font-size: 0.88rem !important;
+            color: #9CA3AF !important;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            margin-top: 0.85rem !important;
+        }
+
+        /* Header Card */
         .dcf-header-card {
-            background: #131722;
-            border: 1px solid #1F2937;
+            background: linear-gradient(180deg, #141925 0%, #101520 100%);
+            border: 1px solid #1E293B;
             border-radius: 10px;
-            padding: 18px 22px;
-            margin-bottom: 14px;
+            padding: 14px 18px;
+            margin-bottom: 10px;
         }
         .dcf-company-title {
-            font-size: 1.55rem;
+            font-size: 1.25rem;
             font-weight: 700;
             color: #F9FAFB;
             line-height: 1.25;
+            letter-spacing: -0.01em;
         }
         .dcf-ticker-badge {
             display: inline-block;
-            background: #1F2937;
-            color: #10B981;
-            font-size: 0.85rem;
+            background: rgba(16, 185, 129, 0.12);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            color: #34D399;
+            font-size: 0.74rem;
             font-weight: 600;
-            padding: 2px 10px;
-            border-radius: 6px;
+            padding: 2px 8px;
+            border-radius: 5px;
             margin-left: 8px;
             vertical-align: middle;
         }
         .dcf-meta-row {
-            margin-top: 6px;
+            margin-top: 5px;
             color: #9CA3AF;
-            font-size: 0.9rem;
+            font-size: 0.8rem;
         }
         .dcf-price-label {
-            font-size: 0.8rem;
+            font-size: 0.7rem;
             color: #9CA3AF;
             text-transform: uppercase;
-            letter-spacing: 0.04em;
+            letter-spacing: 0.05em;
         }
         .dcf-price-value {
-            font-size: 1.65rem;
+            font-size: 1.38rem;
             font-weight: 700;
             color: #F9FAFB;
+            font-variant-numeric: tabular-nums;
+            line-height: 1.2;
         }
         .dcf-timestamp {
-            font-size: 0.78rem;
+            font-size: 0.72rem;
             color: #6B7280;
+            margin-top: 2px;
         }
         .dcf-status-banner {
-            background: #131722;
-            border: 1px solid #1F2937;
+            background: #121722;
+            border: 1px solid #1E293B;
             border-radius: 8px;
-            padding: 12px 16px;
-            margin: 10px 0 14px 0;
+            padding: 10px 14px;
+            margin: 6px 0 12px 0;
+            font-size: 0.85rem;
         }
+
+        /* Compact, terminal-style KPI Metric Cards */
         div[data-testid="stMetric"] {
-            background-color: #131722;
-            border: 1px solid #1F2937;
-            padding: 12px 14px;
+            background: linear-gradient(180deg, #131823 0%, #0F141E 100%);
+            border: 1px solid #1E293B;
+            padding: 10px 12px;
             border-radius: 8px;
+        }
+        div[data-testid="stMetricLabel"] p {
+            font-size: 0.74rem !important;
+            color: #9CA3AF !important;
+            font-weight: 500 !important;
+            letter-spacing: 0.02em;
+            margin-bottom: 2px !important;
+        }
+        div[data-testid="stMetricValue"] {
+            font-size: 1.22rem !important;
+            font-weight: 700 !important;
+            color: #F3F4F6 !important;
+            font-variant-numeric: tabular-nums;
+            line-height: 1.25 !important;
+        }
+        div[data-testid="stMetricDelta"] {
+            font-size: 0.76rem !important;
+            font-variant-numeric: tabular-nums;
+        }
+
+        /* Clean Tabs & Inputs */
+        button[data-baseweb="tab"] {
+            font-size: 0.84rem !important;
+            font-weight: 600 !important;
+            padding: 8px 14px !important;
+        }
+        div[data-testid="stAlert"] {
+            padding: 0.55rem 0.85rem !important;
+            font-size: 0.84rem !important;
+        }
+        div[data-testid="stAlert"] p {
+            font-size: 0.84rem !important;
+            margin-bottom: 0 !important;
+        }
+        .stButton > button {
+            font-size: 0.8rem !important;
+            padding: 0.35rem 0.65rem !important;
+            border-radius: 6px !important;
+        }
+        .stNumberInput label, .stTextInput label, .stRadio label {
+            font-size: 0.8rem !important;
+        }
+        .stCaption, small {
+            font-size: 0.78rem !important;
         }
     </style>
     """,
